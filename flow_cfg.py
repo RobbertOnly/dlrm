@@ -1,0 +1,9 @@
+num_batches = 0
+mini_batch_size = 1
+round_targets = 
+num_indices_per_lookup = 
+num_indices_per_lookup_fixed = 
+m_den = 
+ln_emb = 
+data_trace_file = 
+data_trace_enable_padding = 
