@@ -218,9 +218,6 @@ class DLRM_Net(nn.Module):
         # print(ly)
         return ly
 
-    def tril_indices(self, rows, cols, offset=0):
-        return torch.ones(rows, cols, dtype=torch.uint8).tril(offset).nonzero()
-
     def interact_features(self, x, ly):
         if self.arch_interaction_op == "dot":
             # concatenate dense and sparse features
@@ -234,7 +231,7 @@ class DLRM_Net(nn.Module):
             # approach 2: unique
             _, ni, nj = Z.shape
             offset = 0 if self.arch_interaction_itself else -1
-            li, lj = np.tril_indices(ni, k=offset, m = nj)
+            li, lj = np.tril_indices(ni, k = offset, m = nj)
             Zflat = Z[:, li, lj]
             # concatenate dense features and interactions
             R = torch.cat([x] + [Zflat], dim=1)
@@ -385,6 +382,37 @@ class DLRM_Net(nn.Module):
 
         return z0
 
+#####################################################################################################################
+
+#Static Functions
+
+#####################################################################################################################
+
+def time_wrap(use_gpu):
+    if use_gpu:
+        torch.cuda.synchronize()
+    return time.time()
+
+def dlrm_wrap(X, lS_o, lS_i, use_gpu, device):
+    if use_gpu:  # .cuda()
+        return dlrm(
+            X.to(device),
+            [S_o.to(device) for S_o in lS_o],
+            [S_i.to(device) for S_i in lS_i],
+        )
+    else:
+        return dlrm(X, lS_o, lS_i)
+
+def loss_fn_wrap(Z, T, use_gpu, device):
+    if use_gpu:
+        return loss_fn(Z, T.to(device))
+    else:
+        return loss_fn(Z, T)
+
+
+
+
+###################################################################################################################
 
 if __name__ == "__main__":
     ### import packages ###
@@ -394,61 +422,65 @@ if __name__ == "__main__":
     import collections
     import argparse
 
-    ### parse arguments ###
-    parser = argparse.ArgumentParser(
-        description="Train Deep Learning Recommendation Model (DLRM)"
-    )
-    # model related parameters
-    parser.add_argument("--arch-sparse-feature-size", type=int, default=2)
-    parser.add_argument("--arch-embedding-size", type=str, default="4-3-2")
-    # j will be replaced with the table number
-    parser.add_argument("--arch-mlp-bot", type=str, default="4-3-2")
-    parser.add_argument("--arch-mlp-top", type=str, default="4-2-1")
-    parser.add_argument("--arch-interaction-op", type=str, default="dot")
-    parser.add_argument("--arch-interaction-itself", action="store_true", default=False)
-    # activations and loss
-    parser.add_argument("--activation-function", type=str, default="relu")
-    parser.add_argument("--loss-function", type=str, default="mse")  # or bce
-    parser.add_argument("--loss-threshold", type=float, default=0.0)  # 1.0e-7
-    parser.add_argument("--round-targets", type=bool, default=False)
-    # data
-    parser.add_argument("--data-size", type=int, default=1)
-    parser.add_argument("--num-batches", type=int, default=0)
-    parser.add_argument(
-        "--data-generation", type=str, default="random"
-    )  # synthetic or dataset
-    parser.add_argument("--data-trace-file", type=str, default="./input/dist_emb_j.log")
-    parser.add_argument("--data-set", type=str, default="kaggle")  # or terabyte
-    parser.add_argument("--raw-data-file", type=str, default="")
-    parser.add_argument("--processed-data-file", type=str, default="")
-    parser.add_argument("--data-randomize", type=str, default="total")  # or day or none
-    parser.add_argument("--data-trace-enable-padding", type=bool, default=False)
-    parser.add_argument("--num-indices-per-lookup", type=int, default=10)
-    parser.add_argument("--num-indices-per-lookup-fixed", type=bool, default=False)
-    # training
-    parser.add_argument("--mini-batch-size", type=int, default=1)
-    parser.add_argument("--nepochs", type=int, default=1)
-    parser.add_argument("--learning-rate", type=float, default=0.01)
-    parser.add_argument("--print-precision", type=int, default=5)
-    parser.add_argument("--numpy-rand-seed", type=int, default=123)
-    parser.add_argument("--sync-dense-params", type=bool, default=True)
-    # inference
-    parser.add_argument("--inference-only", action="store_true", default=False)
-    # onnx
-    parser.add_argument("--save-onnx", action="store_true", default=False)
-    # gpu
-    parser.add_argument("--use-gpu", action="store_true", default=False)
-    # debugging and profiling
-    parser.add_argument("--print-freq", type=int, default=1)
-    parser.add_argument("--test-freq", type=int, default=-1)
-    parser.add_argument("--print-time", action="store_true", default=False)
-    parser.add_argument("--debug-mode", action="store_true", default=False)
-    parser.add_argument("--enable-profiling", action="store_true", default=False)
-    parser.add_argument("--plot-compute-graph", action="store_true", default=False)
+####################################################################################################################
 
-    parser.add_argument("--save-model", type=str, default="")
-    parser.add_argument("--load-model", type=str, default="")
-    args = parser.parse_args()
+    # ### parse arguments ###
+    # parser = argparse.ArgumentParser(
+    #     description="Train Deep Learning Recommendation Model (DLRM)"
+    # )
+    # # model related parameters
+    # parser.add_argument("--arch-sparse-feature-size", type=int, default=2)
+    # parser.add_argument("--arch-embedding-size", type=str, default="4-3-2")
+    # # j will be replaced with the table number
+    # parser.add_argument("--arch-mlp-bot", type=str, default="4-3-2")
+    # parser.add_argument("--arch-mlp-top", type=str, default="4-2-1")
+    # parser.add_argument("--arch-interaction-op", type=str, default="dot")
+    # parser.add_argument("--arch-interaction-itself", action="store_true", default=False)
+    # # activations and loss
+    # parser.add_argument("--activation-function", type=str, default="relu")
+    # parser.add_argument("--loss-function", type=str, default="mse")  # or bce
+    # parser.add_argument("--loss-threshold", type=float, default=0.0)  # 1.0e-7
+    # parser.add_argument("--round-targets", type=bool, default=False)
+    # # data
+    # parser.add_argument("--data-size", type=int, default=1)
+    # parser.add_argument("--num-batches", type=int, default=0)
+    # parser.add_argument(
+    #     "--data-generation", type=str, default="random"
+    # )  # synthetic or dataset
+    # parser.add_argument("--data-trace-file", type=str, default="./input/dist_emb_j.log")
+    # parser.add_argument("--data-set", type=str, default="kaggle")  # or terabyte
+    # parser.add_argument("--raw-data-file", type=str, default="")
+    # parser.add_argument("--processed-data-file", type=str, default="")
+    # parser.add_argument("--data-randomize", type=str, default="total")  # or day or none
+    # parser.add_argument("--data-trace-enable-padding", type=bool, default=False)
+    # parser.add_argument("--num-indices-per-lookup", type=int, default=10)
+    # parser.add_argument("--num-indices-per-lookup-fixed", type=bool, default=False)
+    # # training
+    # parser.add_argument("--mini-batch-size", type=int, default=1)
+    # parser.add_argument("--nepochs", type=int, default=1)
+    # parser.add_argument("--learning-rate", type=float, default=0.01)
+    # parser.add_argument("--print-precision", type=int, default=5)
+    # parser.add_argument("--numpy-rand-seed", type=int, default=123)
+    # parser.add_argument("--sync-dense-params", type=bool, default=True)
+    # # inference
+    # parser.add_argument("--inference-only", action="store_true", default=False)
+    # # onnx
+    # parser.add_argument("--save-onnx", action="store_true", default=False)
+    # # gpu
+    # parser.add_argument("--use-gpu", action="store_true", default=False)
+    # # debugging and profiling
+    # parser.add_argument("--print-freq", type=int, default=1)
+    # parser.add_argument("--test-freq", type=int, default=-1)
+    # parser.add_argument("--print-time", action="store_true", default=False)
+    # parser.add_argument("--debug-mode", action="store_true", default=False)
+    # parser.add_argument("--enable-profiling", action="store_true", default=False)
+    # parser.add_argument("--plot-compute-graph", action="store_true", default=False)
+
+    # parser.add_argument("--save-model", type=str, default="")
+    # parser.add_argument("--load-model", type=str, default="")
+    # args = parser.parse_args()
+
+#########################################################################################################################
 
     ### some basic setup ###
     np.random.seed(args.numpy_rand_seed)
@@ -466,6 +498,8 @@ if __name__ == "__main__":
     else:
         device = torch.device("cpu")
         print("Using CPU...")
+
+######################################################################################################################
 
     ### prepare training data ###
     ln_bot = np.fromstring(args.arch_mlp_bot, dtype=int, sep="-")
@@ -537,8 +571,9 @@ if __name__ == "__main__":
             round_targets=args.round_targets,
         )
 
+######################################################################################################################3
+
     ### parse command line arguments ###
-    m_spa = args.arch_sparse_feature_size
     num_fea = ln_emb.size + 1  # num sparse + num dense features
     m_den_out = ln_bot[ln_bot.size - 1]
     if args.arch_interaction_op == "dot":
@@ -567,10 +602,10 @@ if __name__ == "__main__":
             + " does not match first dim of bottom mlp "
             + str(ln_bot[0])
         )
-    if m_spa != m_den_out:
+    if args.arch_sparse_feature_size != m_den_out:
         sys.exit(
             "ERROR: arch-sparse-feature-size "
-            + str(m_spa)
+            + str(args.arch_sparse_feature_size)
             + " does not match last dim of bottom mlp "
             + str(m_den_out)
         )
@@ -604,12 +639,12 @@ if __name__ == "__main__":
         print("dense feature size")
         print(m_den)
         print("sparse feature size")
-        print(m_spa)
+        print(args.arch_sparse_feature_size)
         print(
             "# of embeddings (= # of sparse features) "
             + str(ln_emb.size)
             + ", with dimensions "
-            + str(m_spa)
+            + str(args.arch_sparse_feature_size)
             + "x:"
         )
         print(ln_emb)
@@ -630,9 +665,11 @@ if __name__ == "__main__":
             print([S_i.detach().cpu().tolist() for S_i in lS_i[j]])
             print(lT[j].detach().cpu().numpy())
 
+##################################################################################################################
+
     ### construct the neural network specified above ###
     dlrm = DLRM_Net(
-        m_spa,
+        args.arch_sparse_feature_size,
         ln_emb,
         ln_bot,
         ln_top,
@@ -670,29 +707,47 @@ if __name__ == "__main__":
         # specify the optimizer algorithm
         optimizer = torch.optim.SGD(dlrm.parameters(), lr=args.learning_rate)
 
-    ### main loop ###
-    def time_wrap(use_gpu):
-        if use_gpu:
-            torch.cuda.synchronize()
-        return time.time()
+########################################################################################################################
 
-    def dlrm_wrap(X, lS_o, lS_i, use_gpu, device):
-        if use_gpu:  # .cuda()
-            return dlrm(
-                X.to(device),
-                [S_o.to(device) for S_o in lS_o],
-                [S_i.to(device) for S_i in lS_i],
+    def load_saved_model(load_model, dlrm, inference_only = True):
+        ld_model = torch.load(args.load_model)
+        dlrm.load_state_dict(ld_model["state_dict"])
+        ld_model = copy.deepcopy(ld_model)
+
+        if not args.inference_only:
+            # specify the optimizer algorithm
+            optimizer = torch.optim.SGD(dlrm.parameters(), lr=args.learning_rate)
+            optimizer.load_state_dict(ld_model["opt_state_dict"])
+            # best_gA_test = ld_model['test_acc']
+            # total_loss = ld_model['total_loss']
+            # total_accu = ld_model['total_accu']
+            # k = ld_model["epoch"]  # epochs
+            # j = ld_model["iter"]  # batches
+        else:
+            args.print_freq = ld_model['nbatches']
+            args.test_freq = 0
+        print(
+            "Saved model Training state: epoch = {:d}/{:d}, batch = {:d}/{:d}, train loss = {:.6f}, train accuracy = {:3.3f} %".format(
+                ld_model["epoch"], ld_model["nepochs"], ld_model["iter"], ld_model['nbatches'], ld_model['train_loss'], ld_model['train_acc'] * 100
             )
-        else:
-            return dlrm(X, lS_o, lS_i)
+        )
+        print(
+            "Saved model Testing state: nbatches = {:d}, test loss = {:.6f}, test accuracy = {:3.3f} %".format(
+                ld_model['nbatches_test'], ld_model['test_loss'], ld_model['test_acc'] * 100
+            )
+        )
 
-    def loss_fn_wrap(Z, T, use_gpu, device):
-        if use_gpu:
-            return loss_fn(Z, T.to(device))
-        else:
-            return loss_fn(Z, T)
+        return (dlrm, print_freq, args, ld_model['test_acc'], 
+               ld_model['total_loss'], ld_model['total_accu'], ld_model['epoch'], ld_model['iter'])
+
+############################################################################################################
+
+
 
         # training
+
+
+#####################################################################################################################
 
     best_gA_test = 0
     total_time = 0
@@ -706,38 +761,32 @@ if __name__ == "__main__":
         print("Loading saved mode {}".format(args.load_model))
         ld_model = torch.load(args.load_model)
         dlrm.load_state_dict(ld_model["state_dict"])
-        ld_j = ld_model["iter"]
-        ld_k = ld_model["epoch"]
-        ld_nepochs = ld_model["nepochs"]
-        ld_nbatches = ld_model["nbatches"]
-        ld_nbatches_test = ld_model["nbatches_test"]
-        ld_gA = ld_model["train_acc"]
-        ld_gL = ld_model["train_loss"]
-        ld_total_loss = ld_model["total_loss"]
-        ld_total_accu = ld_model["total_accu"]
-        ld_gA_test = ld_model["test_acc"]
-        ld_gL_test = ld_model["test_loss"]
+        ld_model = copy.deepcopy(ld_model)
+
         if not args.inference_only:
             optimizer.load_state_dict(ld_model["opt_state_dict"])
-            best_gA_test = ld_gA_test
-            total_loss = ld_total_loss
-            total_accu = ld_total_accu
-            k = ld_k  # epochs
-            j = ld_j  # batches
+            best_gA_test = ld_model['test_acc']
+            total_loss = ld_model['total_loss']
+            total_accu = ld_model['total_accu']
+            k = ld_model["epoch"]  # epochs
+            j = ld_model["iter"]  # batches
         else:
-            args.print_freq = ld_nbatches
+            args.print_freq = ld_model['nbatches']
             args.test_freq = 0
         print(
             "Saved model Training state: epoch = {:d}/{:d}, batch = {:d}/{:d}, train loss = {:.6f}, train accuracy = {:3.3f} %".format(
-                ld_k, ld_nepochs, ld_j, ld_nbatches, ld_gL, ld_gA * 100
+                ld_model["epoch"], ld_model["nepochs"], ld_model["iter"], ld_model['nbatches'], ld_model['train_loss'], ld_model['train_acc'] * 100
             )
         )
         print(
             "Saved model Testing state: nbatches = {:d}, test loss = {:.6f}, test accuracy = {:3.3f} %".format(
-                ld_nbatches_test, ld_gL_test, ld_gA_test * 100
+                ld_model['nbatches_test'], ld_model['test_loss'], ld_model['test_acc'] * 100
             )
         )
 
+        #need to save dlrm 
+
+    #profiling
     print("time/loss/accuracy (if enabled):")
     with torch.autograd.profiler.profile(args.enable_profiling, use_gpu) as prof:
         while k < args.nepochs:
@@ -876,12 +925,18 @@ if __name__ == "__main__":
                 j += 1  # nbatches
             k += 1  # nepochs
 
+
+############################################################################################################
+
     # profiling
     if args.enable_profiling:
         with open("dlrm_s_pytorch.prof", "w") as prof_f:
             prof_f.write(prof.key_averages().table(sort_by="cpu_time_total"))
             prof.export_chrome_trace("./dlrm_s_pytorch.json")
         # print(prof.key_averages().table(sort_by="cpu_time_total"))
+
+
+############################################################################################################
 
     # plot compute graph
     if args.plot_compute_graph:
@@ -894,11 +949,17 @@ if __name__ == "__main__":
         # make_dot(V, params=dict(dlrm.named_parameters()))
         # dot.render('dlrm_s_pytorch_graph') # write .pdf file
 
+
+############################################################################################################
+
     # test prints
     if not args.inference_only and args.debug_mode:
         print("updated parameters (weights and bias):")
         for param in dlrm.parameters():
             print(param.detach().cpu().numpy())
+
+
+############################################################################################################
 
     if args.save_onnx:
         # export the model in onnx
