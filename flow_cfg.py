@@ -31,7 +31,7 @@ class training_config(luigi.Config):
 	#Activation and loss
 	activation_function = 'relu'
 	loss_function = 'mse'
-	loss_threshold = '0.0'
+	loss_threshold = 0.0
 
 
 	#Data type and size
@@ -57,7 +57,7 @@ class net_config(luigi.Config):
 	arch_sparse_feature_size = 2
 	arch_embedding_size = '4-3-2'
 	arch_mlp_bot = '4-3-2'
-	arch_mlp_top = '4-3-2'
+	arch_mlp_top = '4-2-1'
 	arch_interaction_op = 'dot'
 	arch_interaction_itself = False
 	inference_only = False
@@ -71,6 +71,7 @@ class process_config(luigi.Config):
 	use_gpu = False
 	rand_seed = 123
 	print_precision = 5
+	experiment_name = 'dlrm_test_experiment'
 
 class log_config(luigi.Config):
 	"""
