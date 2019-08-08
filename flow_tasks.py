@@ -10,7 +10,7 @@ from torch.nn.parameter import Parameter
 
 from dlrm_utils_pytorch import time_wrap, dlrm_wrap, loss_fn_wrap
 import dlrm_data_pytorch as dp
-from dlrm_d6t_dlrm_pytorch import DLRM_Net
+from dlrm_d6t_pytorch import DLRM_Net
 
 from flow_cfg import data_config, training_config, prep_config,\
                      net_config, process_config, log_config, io_config
