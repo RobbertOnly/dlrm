@@ -218,6 +218,9 @@ class DLRM_Net(nn.Module):
         # print(ly)
         return ly
 
+    def tril_indices(self, rows, cols, offset=0):
+        return torch.ones(rows, cols, dtype=torch.uint8).tril(offset).nonzero()
+
     def interact_features(self, x, ly):
         if self.arch_interaction_op == "dot":
             # concatenate dense and sparse features
@@ -231,7 +234,7 @@ class DLRM_Net(nn.Module):
             # approach 2: unique
             _, ni, nj = Z.shape
             offset = 0 if self.arch_interaction_itself else -1
-            li, lj = torch.tril_indices(ni, nj, offset=offset)
+            li, lj = np.tril_indices(ni, k=offset, m = nj)
             Zflat = Z[:, li, lj]
             # concatenate dense features and interactions
             R = torch.cat([x] + [Zflat], dim=1)
