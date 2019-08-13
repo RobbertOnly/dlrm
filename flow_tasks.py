@@ -4,7 +4,7 @@ from luigi.util import inherits
 
 import numpy as np
 import torch
-from torchviz import make_dot
+# from torchviz import make_dot
 import torch.nn.functional as Functional
 from torch.nn.parameter import Parameter
 
@@ -55,7 +55,7 @@ class TaskGetTrainDataset(d6tflow.tasks.TaskPickle):
     data_randomize = luigi.Parameter(default = data_config().data_randomize)
     raw_data_file = luigi.Parameter(default = data_config().raw_data_file)
     processed_data_file = luigi.Parameter(default = data_config().processed_data_file)
-    inference_only = luigi.Parameter(default = net_config().inference_only)
+    inference_only = luigi.BoolParameter(default = net_config().inference_only)
 
     #Data generation method
     data_generation = luigi.Parameter(default=data_config().data_generation)
@@ -74,7 +74,7 @@ class TaskGetTrainDataset(d6tflow.tasks.TaskPickle):
 
     #Log information 
     data_trace_file = luigi.Parameter(default = log_config().data_trace_file)
-    data_trace_enable_padding = luigi.Parameter(default = log_config().data_trace_enable_padding)
+    data_trace_enable_padding = luigi.BoolParameter(default = log_config().data_trace_enable_padding)
 
     def requires(self):
         return self.clone(TaskSetupProcessor)
@@ -177,7 +177,7 @@ class TaskGetTestDataset(d6tflow.tasks.TaskPickle):
 class TaskLintParameters(d6tflow.tasks.TaskPickle):
 
     arch_interaction_op = luigi.Parameter(default = net_config().arch_interaction_op)
-    arch_interaction_itself = luigi.Parameter(default = net_config().arch_interaction_itself)
+    arch_interaction_itself = luigi.BoolParameter(default = net_config().arch_interaction_itself)
     arch_mlp_top = luigi.Parameter(default = net_config().arch_mlp_top)
     arch_sparse_feature_size = luigi.IntParameter(default = net_config().arch_sparse_feature_size)
     debug_mode = luigi.BoolParameter(default = log_config().debug_mode)

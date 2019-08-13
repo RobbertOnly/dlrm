@@ -66,7 +66,7 @@ import dlrm_data_pytorch as dp
 import numpy as np
 
 # onnx
-import onnx
+# import onnx
 
 # pytorch
 import torch
