@@ -1,19 +1,21 @@
 import d6tflow
-import luigi
-import sys
-import os
 
-#Import terminal task
-from flow_tasks import TaskRunDLRMExperiment
+# Import workflow tasks and output visualizations
+import flow_tasks, flow_viz
 
-#Instantiate terminal task
-test = TaskRunDLRMExperiment(debug_mode = True, data_size = 6, mini_batch_size = 2, rand_seed = 111)
+# Instantiate terminal task with parameters
+params = {'data_size': 6, 'mini_batch_size': 2}
+task = flow_tasks.TaskModelTrain(**params)
 
-#Preview terminal task
-d6tflow.settings.check_dependencies=False
-d6tflow.preview(test, clip_params=True)
+# optional: reset everything every time workflow is run
+d6tflow.invalidate_upstream(task, confirm=False)
 
-#Run terminal task
-# d6tflow.run(test)
+# Preview terminal task
+d6tflow.preview(task, clip_params=True)
 
+# Run terminal task
+d6tflow.run(task)
 
+# Show output
+if task.complete():
+    flow_viz.show_test_prints(params)

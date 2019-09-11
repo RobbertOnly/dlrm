@@ -1,10 +1,8 @@
 import d6tflow
 import luigi
-from luigi.util import inherits
 
 import numpy as np
 import torch
-# from torchviz import make_dot
 import torch.nn.functional as Functional
 from torch.nn.parameter import Parameter
 
@@ -16,68 +14,40 @@ from flow_cfg import data_config, training_config, prep_config,\
                      net_config, process_config, log_config, io_config
 
 
-
-class TaskSetupProcessor(d6tflow.tasks.TaskCache):
-
-    rand_seed = luigi.IntParameter(default = process_config().rand_seed)
-    print_precision = luigi.IntParameter(default = process_config().rand_seed)
-    use_gpu = luigi.BoolParameter(default = process_config().use_gpu)
-
-    def run(self):
-        ### some basic setup ###
-        processor = None
-        np.random.seed(self.rand_seed)
-        np.set_printoptions(precision=self.print_precision)
-        torch.set_printoptions(precision=self.print_precision)
-        torch.manual_seed(self.rand_seed)
-
-        self.use_gpu = self.use_gpu and torch.cuda.is_available()
-        if self.use_gpu:
-            processor = "GPU"
-            torch.cuda.manual_seed_all(self.numpy_rand_seed)
-            torch.backends.cudnn.deterministic = True
-            print("Using {} GPU(s)...".format(torch.cuda.device_count()))
-
-        else:
-            processor = 'CPU'
-            device = torch.device("cpu")
-            print("Using CPU...")
-
-        self.save(processor)
-
-
-@inherits(TaskSetupProcessor)
 class TaskGetTrainDataset(d6tflow.tasks.TaskPickle):
 
-
-    #Actual dataset
-    data_set = luigi.Parameter(default = data_config().data_set)
-    data_randomize = luigi.Parameter(default = data_config().data_randomize)
-    raw_data_file = luigi.Parameter(default = data_config().raw_data_file)
-    processed_data_file = luigi.Parameter(default = data_config().processed_data_file)
-    inference_only = luigi.BoolParameter(default = net_config().inference_only)
-
-    #Data generation method
+    # Data generation method
     data_generation = luigi.Parameter(default=data_config().data_generation)
 
-    #Network and embedding details
+    # Actual dataset
+    data_set = luigi.Parameter(default=data_config().data_set)
+    data_randomize = luigi.Parameter(default=data_config().data_randomize)
+    inference_only = luigi.BoolParameter(net_config().inference_only)
+
+    # Network and embedding details
     arch_mlp_bot = luigi.Parameter(default=net_config().arch_mlp_bot)
     arch_embedding_size = luigi.Parameter(default=net_config().arch_embedding_size)
 
-    #Data information
+    # Data information
     data_size = luigi.IntParameter(default=data_config().data_size)
-    num_batches = luigi.IntParameter(default = data_config().num_batches)
-    mini_batch_size = luigi.IntParameter(default = training_config().mini_batch_size)
-    round_targets = luigi.BoolParameter(default = data_config().round_targets)
-    num_indices_per_lookup = luigi.IntParameter(default = data_config().num_indices_per_lookup)
-    num_indices_per_lookup_fixed = luigi.BoolParameter(default = data_config().num_indices_per_lookup_fixed)
+    num_batches = luigi.IntParameter(default=data_config().num_batches)
+    mini_batch_size = luigi.IntParameter(default=training_config().mini_batch_size)
+    round_targets = luigi.BoolParameter(default=data_config().round_targets)
+    num_indices_per_lookup = luigi.IntParameter(default=data_config().num_indices_per_lookup)
+    num_indices_per_lookup_fixed = luigi.BoolParameter(default=data_config().num_indices_per_lookup_fixed)
 
-    #Log information 
-    data_trace_file = luigi.Parameter(default = log_config().data_trace_file)
-    data_trace_enable_padding = luigi.BoolParameter(default = log_config().data_trace_enable_padding)
+    # architecture
+    arch_interaction_op = luigi.Parameter(default=net_config().arch_interaction_op)
+    arch_interaction_itself = luigi.BoolParameter(default=net_config().arch_interaction_itself)
+    arch_mlp_top = luigi.Parameter(default=net_config().arch_mlp_top)
+    arch_sparse_feature_size = luigi.IntParameter(default=net_config().arch_sparse_feature_size)
 
-    def requires(self):
-        return self.clone(TaskSetupProcessor)
+    # runtime params
+    debug_mode = log_config().debug_mode
+    raw_data_file = data_config().raw_data_file
+    processed_data_file = data_config().processed_data_file
+    data_trace_file = log_config().data_trace_file
+    data_trace_enable_padding = log_config().data_trace_enable_padding
 
     def run(self):
 
@@ -146,50 +116,6 @@ class TaskGetTrainDataset(d6tflow.tasks.TaskPickle):
             raise ValueError(
                 "ERROR: --data-generation=" + self.data_generation + " is not supported"
             )
-
-        self.save(dataset_dict)
-
-
-
-@inherits(TaskGetTrainDataset)
-class TaskGetTestDataset(d6tflow.tasks.TaskPickle):
-
-    def requires(self):
-        return self.clone(TaskGetTrainDataset)
-
-    def run(self):
-
-        dataset_dict = self.input().load()
-
-        if self.data_generation != 'dataset':
-            (dataset_dict['nbatches'], dataset_dict['lT']) =\
-             dp.generate_random_output_data(
-                    self.data_size,
-                    self.num_batches,
-                    self.mini_batch_size,
-                    round_targets=self.round_targets)
-
-        self.save(dataset_dict)
-
-
-### START HERE!!! 
-@inherits(TaskGetTestDataset)
-class TaskLintParameters(d6tflow.tasks.TaskPickle):
-
-    arch_interaction_op = luigi.Parameter(default = net_config().arch_interaction_op)
-    arch_interaction_itself = luigi.BoolParameter(default = net_config().arch_interaction_itself)
-    arch_mlp_top = luigi.Parameter(default = net_config().arch_mlp_top)
-    arch_sparse_feature_size = luigi.IntParameter(default = net_config().arch_sparse_feature_size)
-    debug_mode = luigi.BoolParameter(default = log_config().debug_mode)
-
-
-    def requires(self):
-        return self.clone(TaskGetTestDataset)
-
-    def run(self):
-
-        #Input features
-        dataset_dict = self.input().load()
 
 
         print("\n\n\n\n\n\n\n\n\n")
@@ -292,14 +218,35 @@ class TaskLintParameters(d6tflow.tasks.TaskPickle):
 
         self.save(dataset_dict)
 
-@inherits(TaskLintParameters)
+
+
+@d6tflow.inherits(TaskGetTrainDataset)
+class TaskGetTestDataset(d6tflow.tasks.TaskPickle):
+
+    def run(self):
+
+        if self.data_generation != 'dataset':
+            dataset_dict_output = dp.generate_random_output_data(
+                    self.data_size,
+                    self.num_batches,
+                    self.mini_batch_size,
+                    round_targets=self.round_targets)
+        else:
+            raise NotImplementedError(f'data_generation {self.data_generation} not implemented')
+
+        self.save(dataset_dict_output)
+
+
+@d6tflow.inherits(TaskGetTrainDataset)
+@d6tflow.clone_parent
 class TaskBuildNetwork(d6tflow.tasks.TaskPickle):
 
-    sync_dense_params = luigi.BoolParameter(default = training_config().sync_dense_params)
-    loss_threshold = luigi.FloatParameter(default = training_config().loss_threshold)
+    sync_dense_params = luigi.BoolParameter(default=training_config().sync_dense_params)
+    loss_threshold = luigi.FloatParameter(default=training_config().loss_threshold)
 
-    def requires(self):
-        return self.clone(TaskLintParameters)
+    # runtime params
+    use_gpu = process_config().use_gpu
+    debug_mode = log_config().debug_mode
 
     def run(self):
 
@@ -338,43 +285,61 @@ class TaskBuildNetwork(d6tflow.tasks.TaskPickle):
                                 dataset_dict['num_fea'] - 1)
             dlrm = dlrm.to(torch.device("cuda", 0))  # .cuda()
 
-        self.save({'dlrm': dlrm,
-                  'dataset_dict': dataset_dict})
+        self.save(dlrm)
 
 
 
 
-@inherits(TaskBuildNetwork)
-# todo: possible to write a decorator? @clone_parent
+@d6tflow.inherits(TaskBuildNetwork)
 class TaskModelTrain(d6tflow.tasks.TaskPickle):
+    persist = ['model','data']
 
-    load_model = luigi.Parameter(default = io_config().load_model)
-    loss_function = luigi.Parameter(default = training_config().loss_function)
-    learning_rate = luigi.FloatParameter(default = training_config().learning_rate)
-    num_epochs = luigi.IntParameter(default = training_config().num_epochs)
-    print_time = luigi.BoolParameter(default = log_config().print_time)
-    save_model = luigi.Parameter(default = io_config().save_model)
-    enable_profiling = luigi.BoolParameter(default = log_config().enable_profiling)
-    loss_function = luigi.Parameter(default = training_config().loss_function)
+    loss_function = luigi.Parameter(default=training_config().loss_function)
+    learning_rate = luigi.FloatParameter(default=training_config().learning_rate)
+    num_epochs = luigi.IntParameter(default=training_config().num_epochs)
+    loss_function = luigi.Parameter(default=training_config().loss_function)
+    rand_seed = luigi.IntParameter(default=process_config().rand_seed)
 
-    #Frequencies
-    print_freq = luigi.IntParameter(default = log_config().print_freq)
-    test_freq = luigi.IntParameter(default = log_config().test_freq)
+    # runtime params
+    use_gpu = process_config().use_gpu
+    print_time = log_config().print_time
+    load_model = io_config().load_model
+    save_model = io_config().save_model
+    enable_profiling = log_config().enable_profiling
+    print_precision = process_config().print_precision
+    print_freq = log_config().print_freq
+    test_freq = log_config().test_freq
 
 
     def requires(self):
-        return self.clone(TaskBuildNetwork)
+        return {'model': self.clone(TaskBuildNetwork),
+                'data-train': self.clone(TaskGetTrainDataset),
+                'data-test': self.clone(TaskGetTestDataset)}
 
     def run(self):
 
-        # todo: how to load/save intermediate models?
-        # normally if exists, task considered complete so wouldn't continue training
-        # condition is k < args.num_epochs, anything before don't save final model
-        # todo: override complete function where if super_complete() output.load() and saved_epoch>=nepoch
-        # this is where it loads intermediate epochs and results, rest don't need
-        input_dict = self.input().load()
-        dataset_dict = input_dict['dataset_dict']
-        dlrm = input_dict['dlrm']
+        dataset_dict = self.input()['data-train'].load()
+        (dataset_dict['nbatches'], dataset_dict['lT']) = self.input()['data-test'].load()
+        dlrm = self.input()['model'].load()
+
+        ### some basic setup ###
+        processor = None
+        np.random.seed(self.rand_seed)
+        np.set_printoptions(precision=self.print_precision)
+        torch.set_printoptions(precision=self.print_precision)
+        torch.manual_seed(self.rand_seed)
+
+        self.use_gpu = self.use_gpu and torch.cuda.is_available()
+        if self.use_gpu:
+            processor = "GPU"
+            torch.cuda.manual_seed_all(self.numpy_rand_seed)
+            torch.backends.cudnn.deterministic = True
+            print("Using {} GPU(s)...".format(torch.cuda.device_count()))
+
+        else:
+            processor = 'CPU'
+            device = torch.device("cpu")
+            print("Using CPU...")
 
         # specify the loss function
         if self.loss_function == "mse":
@@ -568,129 +533,5 @@ class TaskModelTrain(d6tflow.tasks.TaskPickle):
         print("<==============================================================>\n\n\n")
         dataset_dict['Z'] = Z 
         dataset_dict['L'] = L
-        self.save({'dlrm' : dlrm,
-                    'dataset_dict': dataset_dict})
+        self.save({'model' : dlrm, 'data': dataset_dict})
 
-
-@inherits(TaskModelTrain)
-class TaskEnableProfiling(d6tflow.tasks.TaskPickle):
-
-
-    def requires(self):
-
-        return self.clone(TaskModelTrain)
-        
-    def run(self):
-
-        input_dict = self.input().load()
-        dataset_dict = input_dict['dataset_dict']
-        dlrm = input_dict['dlrm']
-        
-        if self.enable_profiling:
-
-            with open("dlrm_s_pytorch.prof", "w") as prof_f:
-                prof_f.write(prof.key_averages().table(sort_by="cpu_time_total"))
-                prof.export_chrome_trace("./dlrm_s_pytorch.json")
-
-        self.save({'dlrm': dlrm,
-                  'dataset_dict': dataset_dict}) 
-
-
-@inherits(TaskModelTrain)
-class TaskPlotComputeGraph(d6tflow.tasks.TaskPickle):
-
-    plot_compute_graph = luigi.BoolParameter(default = log_config().plot_compute_graph)
-
-    def requires(self):
-        return self.clone(TaskEnableProfiling)
-
-    def run(self):
-
-        input_dict = self.input().load()
-        dataset_dict = input_dict['dataset_dict']
-        dlrm = input_dict['dlrm']
-        
-        if self.plot_compute_graph:
-            # sys.exit(
-            #     "ERROR: Please install pytorchviz package in order to use the"
-            #     + " visualization. Then, uncomment its import above as well as"
-            #     + " three lines below and run the code again."
-            # )
-            V = dataset_dict['Z'].mean() if self.inference_only else dataset_dict['L']
-            make_dot(V, params=dict(dlrm.named_parameters()))
-            dot.render('dlrm_s_pytorch_graph') # write .pdf file
-
-        self.save({'dlrm': dlrm,
-                   'dataset_dict': dataset_dict})
-
-
-@inherits(TaskPlotComputeGraph)
-class TaskShowTestPrints(d6tflow.tasks.TaskPickle):
-
-    def requires(self):
-        return self.clone(TaskPlotComputeGraph)
-
-    def run(self):
-
-        input_dict = self.input().load()
-        dataset_dict = input_dict['dataset_dict']
-        dlrm = input_dict['dlrm']
-
-        if not self.inference_only and self.debug_mode:
-            print("\n\n\n<===========================================================>")
-            print("updated parameters (weights and bias):")
-            for param in dlrm.parameters():
-                print(param.detach().cpu().numpy())
-            print("<===========================================================>\n\n\n")
-
-        self.save({'dlrm': dlrm,
-                       'dataset_dict': dataset_dict})
-
-
-@inherits(TaskShowTestPrints)
-class TaskSaveOnnx(d6tflow.tasks.TaskPickle):
-
-    save_onnx = luigi.BoolParameter(default = io_config().save_onnx)
-
-    def requires(self):
-        return self.clone(TaskShowTestPrints)
-
-    def run(self):
-
-        input_dict = self.input().load()
-        dataset_dict = input_dict['dataset_dict']
-        dlrm = input_dict['dlrm']
-
-        if self.save_onnx:
-            # export the model in onnx
-            with open("dlrm_s_pytorch.onnx", "w+b") as dlrm_pytorch_onnx_file:
-                torch.onnx._export(
-                    dlrm, (dataset_dict['lX'][0], dataset_dict['lS_o'][0], 
-                           dataset_dict['lS_i'][0]), dlrm_pytorch_onnx_file, verbose=True
-                )
-            # recover the model back
-            dlrm_pytorch_onnx = onnx.load("dlrm_s_pytorch.onnx")
-            # check the onnx model
-            onnx.checker.check_model(dlrm_pytorch_onnx)
-
-        self.save({'dlrm': dlrm,
-                       'dataset_dict': dataset_dict})
-
-@inherits(TaskSaveOnnx)
-class TaskRunDLRMExperiment(d6tflow.tasks.TaskPickle):
-
-    experiment_name = luigi.Parameter(default = process_config().experiment_name)
-
-    def requires(self):
-        return self.clone(TaskSaveOnnx)
-
-    def run(self):
-
-        input_dict = self.input().load()
-        dataset_dict = input_dict['dataset_dict']
-        dlrm = input_dict['dlrm']
-        
-        print("\n\nFINISHED EXPERIMENT {}\n\n".format(self.experiment_name))
-
-        self.save({'dlrm': dlrm,
-                   'dataset_dict': dataset_dict})
