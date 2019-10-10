@@ -87,6 +87,14 @@ How to run dlrm code using d6tflow?
 
 See [5 Step Guide to Scalable Deep Learning Pipelines with pytorch and d6tflow](https://towardsdatascience.com/5-step-guide-to-scalable-deep-learning-pipelines-with-d6tflow-94d21cb40d22) for details.
 
+
+`flow_run.py`: run flow => run this file  
+`flow_task.py`: tasks code  
+`flow_viz.py`: show model output  
+`flow_cfg.py`: default parameters  
+`dlrm_d6t_pytorch.py`: dlrm_data_pytorch.py adopted for d6tflow  
+
+
 ```
 $ python flow_run.py
 
