@@ -82,7 +82,67 @@ Implementation
 
        dlrm_s_benchmark.sh, dlrm_s_criteo_kaggle.sh
 
-How to run dlrm code?
+How to run dlrm code using d6tflow?
+--------------------
+
+See [5 Step Guide to Scalable Deep Learning Pipelines with pytorch and d6tflow](https://towardsdatascience.com/5-step-guide-to-scalable-deep-learning-pipelines-with-d6tflow-94d21cb40d22) for details.
+
+```
+$ python flow_run.py
+
+└─--[TaskModelTrain-{'data_generation': 'random'}[more] (PENDING)]
+   |--[TaskBuildNetwork-{'data_generation': 'random'}[more] (PENDING)]
+   |  └─--[TaskGetTrainDataset-{'data_generation': 'random'}[more] (PENDING)]
+   |--[TaskGetTrainDataset-{'data_generation': 'random'}[more] (PENDING)]
+   └─--[TaskGetTestDataset-{'data_generation': 'random'}[more] (PENDING)]
+
+<==============================================================>
+Finished training it 1/3 of epoch 0, -1.00 ms/it, loss 0.038856, accuracy 0.000 %
+Finished training it 2/3 of epoch 0, -1.00 ms/it, loss 0.070764, accuracy 0.000 %
+Finished training it 3/3 of epoch 0, -1.00 ms/it, loss 0.034082, accuracy 0.000 %
+<==============================================================>
+
+<===========================================================>
+updated parameters (weights and bias):
+[[-0.39806  0.33264]
+ [-0.35522  0.33456]
+ [ 0.18658 -0.36135]
+ [-0.4546   0.0853 ]]
+[[ 0.5741  -0.15723]
+ [ 0.27217 -0.23233]
+ [-0.51979 -0.45908]]
+[[-0.00458 -0.56259]
+ [ 0.28886 -0.66843]]
+[[-0.45658 -0.48438 -0.11538  0.23664]
+ [-0.03882 -0.44389 -0.47685  0.14695]
+ [ 0.79102 -0.53869  0.55418 -0.12023]]
+[-0.61976  0.4016   0.31737]
+[[-0.43857  0.94043 -0.62943]
+ [-0.55536 -0.95519  0.16263]]
+[ 0.18781 -0.73076]
+[[-0.52249  0.11244  0.02708  0.54899  0.45315  0.09779 -0.51471 -0.37041]
+ [ 0.18563 -0.47394 -0.16058 -0.37974 -0.61932  0.22577  0.55913 -1.13533]
+ [-0.85067  0.08258 -0.51795 -0.10485 -0.24437  0.54663  0.25933  0.15407]
+ [ 0.3905   0.7062   0.30952  0.08958 -0.02819  0.42509 -0.03001 -0.4815 ]]
+[ 0.57368  0.17855 -1.08957 -0.95467]
+[[ 1.53869  0.16943  0.33269 -0.0699 ]
+ [-0.68558  0.84783  0.26123  0.09163]]
+[ 0.17255 -0.66373]
+[[-1.06504  0.22181]]
+[1.31833]
+<===========================================================>
+
+
+```
+
+To edit model parameters in `flow_run.py` pass parmeters like so
+
+```
+TaskModelTrain(num_epochs=10)
+```
+
+
+How to run dlrm code using CLI?
 --------------------
 1) A sample run of the code, with a tiny model is shown below
 ```
